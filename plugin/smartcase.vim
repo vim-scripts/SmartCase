@@ -1,6 +1,6 @@
 " Script Name: smartcase.vim
-" Version:     1.0.1
-" Last Change: September 21, 2005
+" Version:     1.0.2
+" Last Change: January 12, 2006
 " Author:      Yuheng Xie <elephant@linux.net.cn>
 "
 " Description: replacing words while keeping original lower/uppercase style
@@ -21,28 +21,26 @@
 "
 "                :%s/file\A\?size/\=SmartCase("LastModifiedTime")/ig
 "
-" Details:     SmartCase(...) recognizes words in three case styles: 1: xxxx
-"              (all lowercases), 2: XXXX(all uppercases) and 3: Xxxx(one
-"              uppercase following by lowercases).
+" Details:     SmartCase(str_words, str_styles = 0) make a new string using
+"              the words from str_words and the lower/uppercases styles from
+"              str_styles. If any of the arguments is a number n, it's
+"              equivalent to submatch(n). If str_styles is omitted, it's 0.
 "
-"              It first tries to find out the words and their case styles in
-"              the reference string (which in most cases will be submatch(0),
-"              that is, the string your are going to replace). Then it finds
-"              out all the words in your replacing string. Finally it combines
-"              the words from your replacing string and the case styles from
-"              the reference string into a result string.
+"              SmartCase recognizes words in three case styles: 1: xxxx (all
+"              lowercases), 2: XXXX(all uppercases) and 3: Xxxx(one uppercase
+"              following by lowercases).
 "
-"              For example, a reference string "getFileName" will be cut into
-"              three words: "get"(style 1), "File"(style 3) and "Name"(style
-"              3). If the replacing string is "MAX_SIZE", it will be treated
-"              as two words: "max" and "size", their case styles is
-"              unimportant. The final result string will be "maxSize".
+"              For example, str_styles "getFileName" will be cut into three
+"              words: "get"(style 1), "File"(style 3) and "Name"(style 3). If
+"              str_words is "MAX_SIZE", it will be treated as two words: "max"
+"              and "size", their case styles is unimportant. The final result
+"              string will be "maxSize".
 "
 "              A note, in the case some uppercases following by some
 "              lowercases, e.g. "HTMLFormat", SmartCase will treat it as
 "              "HTML"(2) and "Format"(3) instead of "HTMLF"(2) and "ormat"(1).
 "
-" Usage:       1. call SmartCase(replacing, reference) in replace expression
+" Usage:       1. call SmartCase(str_words, str_styles) in replace expression
 "
 "              The simplest way: (in most cases, you will need the /i flag)
 "
@@ -51,13 +49,13 @@
 "              This will replace any GoodDay into HelloWorld, GOODDAY into
 "              HELLOWORLD, etc.
 "
-"              If the reference string is ignored, it will be set to
-"              submatch(0). Or if it's a number n, it will be set to
-"              submatch(n). Example:
+"              For convenience, if str_styles is omitted, it will be set to
+"              submatch(0). Or if any of the arguments is a number n, it will
+"              be set to submatch(n). Example:
 "
 "                :%s/good\(day\)/\=SmartCase("HelloWorld", 1)/ig
 "
-"              It's equal to:
+"              It's equivalent to:
 "
 "                :%s/good\(day\)/\=SmartCase("HelloWorld", submatch(1))/ig
 "
@@ -71,25 +69,41 @@
 "              matter whether you say "hello world" or "HelloWorld" as long as
 "              words could be discerned.)
 "
-"                :%SmartCase hello world
+"                :%SmartCase "hello world"
 "
 "              This will do exactly the same as mentioned in usage 1.
+"
+"              3. replacing lower/uppercases style, keeping original words
+"
+"              As an opposition to usage 1., this can be achieved by using
+"              submatch(0) as str_words instead of str_styles. Example:
+"
+"                :%s/\(\u\l\+\)\+/\=SmartCase(0, "x_x")/g
+"
+"              This will replace any GoodDay into good_day, HelloWorld into
+"              hello_world, etc.
 
-command! -rang -nargs=+ SmartCase :<line1>,<line2>s//\=SmartCase(<q-args>)/g
+command! -rang -nargs=+ SmartCase :<line1>,<line2>s//\=SmartCase(<args>)/g
 
-" replace the words in reference with the words from replacing while keeping
-" reference's case style
-function! SmartCase(...) " SmartCase(replacing, reference = 0)
+" make a new string using the words from str_words and the lower/uppercase
+" styles from str_styles
+function! SmartCase(...) " SmartCase(str_words, str_styles = 0)
 	if a:0 == 0
 		return
 	elseif a:0 == 1
-		let replacing = a:1
-		let reference = submatch(0)
+		let str_words = a:1
+		let str_styles = submatch(0)
+		if matchstr(str_words, '\d\+') == str_words
+			let str_words = submatch(0 + str_words)
+		endif
 	else
-		let replacing = a:1
-		let reference = a:2
-		if matchstr(reference, '\d\+') == reference
-			let reference = submatch(0 + reference)
+		let str_words = a:1
+		let str_styles = a:2
+		if matchstr(str_words, '\d\+') == str_words
+			let str_words = submatch(0 + str_words)
+		endif
+		if matchstr(str_styles, '\d\+') == str_styles
+			let str_styles = submatch(0 + str_styles)
 		endif
 	endif
 
@@ -99,13 +113,13 @@ function! SmartCase(...) " SmartCase(replacing, reference = 0)
 	let j = 0
 	let separator = ""
 	let case = 0
-	while j < strlen(replacing)
-		if i < strlen(reference)
-			let s = match(reference, regexp, i)
+	while j < strlen(str_words)
+		if i < strlen(str_styles)
+			let s = match(str_styles, regexp, i)
 			if s >= 0
-				let e = matchend(reference, regexp, s)
-				let separator = strpart(reference, i, s - i)
-				let word = strpart(reference, s, e - s)
+				let e = matchend(str_styles, regexp, s)
+				let separator = strpart(str_styles, i, s - i)
+				let word = strpart(str_styles, s, e - s)
 				if word ==# tolower(word)
 					let case = 1  " all lowercases
 				elseif word ==# toupper(word)
@@ -117,10 +131,10 @@ function! SmartCase(...) " SmartCase(replacing, reference = 0)
 			endif
 		endif
 
-		let s = match(replacing, regexp, j)
+		let s = match(str_words, regexp, j)
 		if s >= 0
-			let e = matchend(replacing, regexp, s)
-			let word = strpart(replacing, s, e - s)
+			let e = matchend(str_words, regexp, s)
+			let word = strpart(str_words, s, e - s)
 			if case == 1
 				let result = result . separator . tolower(word)
 			elseif case == 2
@@ -136,15 +150,15 @@ function! SmartCase(...) " SmartCase(replacing, reference = 0)
 		endif
 	endwhile
 
-	while i < strlen(reference)
-		let e = matchend(reference, regexp, i)
+	while i < strlen(str_styles)
+		let e = matchend(str_styles, regexp, i)
 		if e >= 0
 			let i = e
 		else
 			break
 		endif
 	endwhile
-	let result = result . strpart(reference, i)
+	let result = result . strpart(str_styles, i)
 
 	return result
 endfunction
